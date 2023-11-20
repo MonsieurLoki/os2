@@ -23,83 +23,131 @@ int myFct(char msg[20], char buffer[150])
     printf("Le mot '%s' a été trouvé dans la phrase : '%s'\n", msg, buffer);
 }
 
-int fctParent(int numPipe[])
+// cette function est ex
+void vivre_ma_vie_de_fils(int nr_fils, int pipe[2])
 {
-    // Code du processus parent
-    close(numPipe[1]); // Fermer le descripteur d'écriture, car le parent lit seulement
-    char buffer[150];
-    int bytesRead;
-    //  int status;
-    //         waitpid(pid, &status, 0); // Attendre que le processus fils se termine
-    fcntl(numPipe[0], F_SETFL, O_NONBLOCK);
-    int k = 0;
-    while (1)
+
+    srand(time(NULL));
+    close(pipe[0]);
+    int messagesCount;
+    if (nr_fils == 1)
     {
-        k++;
-        // Lecture non bloquante
-        bytesRead = read(numPipe[0], buffer, sizeof(buffer));
-        if (bytesRead > 0)
+        messagesCount = 3;
+    }
+    else
+    {
+        messagesCount = 5;
+    }
+    int i = 0;
+    int delay = 1;
+    while (i < messagesCount)
+    {
+        char maChaine[] = "msg"; // Exemple de chaîne
+        int longueur = strlen(maChaine);
+        int numero = myRandom(1, 3);
+        char message[100];
+        char msg1[20] = "bonjour";
+        char msg2[20] = "au revoir";
+        char msg3[20] = "a demain";
+        if (numero == 1)
         {
-            char msg1[20] = "bonjour";
-            char msg2[20] = "au revoir";
-            char msg3[20] = "a demain";
-            k = 0;
-            if (strstr(buffer, msg1) != NULL)
-            {
-                // printf("Le mot '%s' a été trouvé dans la phrase : '%s'\n", msg1, buffer);
-                myFct(msg1, buffer);
-            }
-            // else
-            // {
-            //     printf("Le mot '%s' et '%s' n'ont pas été trouvé dans la phrase : '%s'\n", msg2, msg3, buffer);
-            // }
-            else if (strstr(buffer, msg2) != NULL)
-            {
-                // printf("Le mot '%s' a été trouvé dans la phrase : '%s'\n", msg2, buffer);
-                myFct(msg2, buffer);
-            }
-            // else
-            // {
-            //     printf("Le mot '%s' et '%s' n'ont pas été trouvé dans la phrase : '%s'\n", msg1, msg3, buffer);
-            // }
-            else if (strstr(buffer, msg3) != NULL)
-            {
-                // printf("Le mot '%s' a été trouvé dans la phrase : '%s'\n", msg3, buffer);
-                myFct(msg3, buffer);
-            }
-            // else
-            // {
-            //     printf("Le mot '%s' et '%s' n'ont pas été trouvé dans la phrase : '%s'\n", msg1, msg2, buffer);
-            // }
-            // printf("Message reçu du fils : %s\n", buffer);
+            snprintf(message, sizeof(message), "%s (message du fils 2 après %d secondes)", msg1, delay);
         }
-        else if (bytesRead == 0)
+        else if (numero == 2)
         {
-            // Toutes les données du tube ont été lues, sortie de la boucle
-            break;
+            snprintf(message, sizeof(message), "%s (message du fils 2 après %d secondes)", msg2, delay);
         }
-        else if (bytesRead == -1)
+        else if (numero == 3)
         {
-            printf("%d) Pas de message du fils.\n", k);
-            // Les données ne sont pas encore disponibles, attendre un peu
-            usleep(1000000); // Attendre 0.5 seconde
+            snprintf(message, sizeof(message), "%s (message du fils 2 après %d secondes)", msg3, delay);
         }
-        else
+        write(pipe[1], message, strlen(message) + 1);
+        delay = myRandom(2, 3); // Générer un délai aléatoire entre 4 et 6 secondes
+        sleep(delay);           // Attendre le délai généré aléatoirement
+        i++;
+    }
+    close(pipe[1]);
+}
+
+// cette fonction regarde dans le pipe passé en param s'il y a un message à traiter
+// si c'est le cas, on traite le message et on sort
+// sinon, on sort directement
+// on revoie comme résultat
+//      1 si le pipe est encore ouvert (càd pas encore fermé par le fils)
+//      0 si le pipe a été fermé par le fils
+// NB : nb_bytes_read = read(pipe, buffer, sizeof(buffer)
+//    si nb_bytes_read =
+//          > 0 : il y a des char dans le pipe
+//          = 0 : le pipe a été clôturé
+//          -1  : pas de char dans le pipe pour le moment
+int traiterContenuActuelDuPipe(int nr_fils, int numPipe[])
+{
+    char buffer[150];
+
+    fcntl(numPipe[0], F_SETFL, O_NONBLOCK);
+
+    int bytesRead = read(numPipe[0], buffer, sizeof(buffer));
+    if (bytesRead > 0)
+    {
+        char msg1[20] = "bonjour";
+        char msg2[20] = "au revoir";
+        char msg3[20] = "a demain";
+
+        if (strstr(buffer, msg1) != NULL)
         {
-            perror("Erreur de lecture");
-            break;
+            myFct(msg1, buffer); // Assurez-vous que myFct est définie correctement
+        }
+        else if (strstr(buffer, msg2) != NULL)
+        {
+            myFct(msg2, buffer);
+        }
+        else if (strstr(buffer, msg3) != NULL)
+        {
+            myFct(msg3, buffer);
         }
     }
-    close(numPipe[0]);
+    else if (bytesRead == 0)
+    {
+        printf("Le pipe du fils nr %d a été clôturé par le fils\n", nr_fils);
+        // close(numPipe[0]);
+        return 0; // Pipe a été clôturé
+    }
+    else if (bytesRead == -1)
+    {
+        printf("Pas de données dans le pipe du fils %d pour le moment\n", nr_fils);
+        return 1;
+    }
+}
+
+void gerer_mes_fils(int pipe1[2], int pipe2[2])
+{
+
+    close(pipe1[1]); // Fermer le descripteur d'écriture, car le parent lit seulement
+    close(pipe2[1]); // Fermer le descripteur d'écriture, car le parent lit seulement
+
+    while (1)
+    {
+        int statusPipe1 = traiterContenuActuelDuPipe(1, pipe1);
+        int statusPipe2 = traiterContenuActuelDuPipe(2, pipe2);
+
+        if (statusPipe1 == 0 && statusPipe2 == 0)
+        {
+            printf("Les deux pipes ont été fermés par les fils.\n");
+            break; // Sortir de la boucle infinie
+        }
+        // printf("statusPipe1 : %d; statusPipe2 : %d\n", statusPipe1, statusPipe2);
+        usleep(1000000); // attendre x microsecond
+    }
 }
 
 int main()
 {
-    int fd1[2], fd2[2];
+    int pipe1[2], pipe2[2];
+    // int pipe[20][2];
     pid_t pid1, pid2;
     srand(time(NULL));
 
-    if (pipe(fd1) == -1)
+    if (pipe(pipe1) == -1)
     {
         perror("Erreur de la création du tube");
         exit(EXIT_FAILURE);
@@ -115,42 +163,12 @@ int main()
 
     if (pid1 == 0)
     {
-        close(fd1[0]);
-        int messagesCount = 10; // Générer 10 messages
-        int i = 0;
-        int delay = 1;
-        while (i < messagesCount)
-        {
-            char maChaine[] = "msg"; // Exemple de chaîne
-            int longueur = strlen(maChaine);
-            int numero = myRandom(1, 3);
-            char message[100];
-            char msg1[20] = "bonjour";
-            char msg2[20] = "au revoir";
-            char msg3[20] = "a demain";
-            if (numero == 1)
-            {
-                snprintf(message, sizeof(message), "%s (message du fils 1 après %d secondes)", msg1, delay);
-            }
-            else if (numero == 2)
-            {
-                snprintf(message, sizeof(message), "%s (message du fils 1 après %d secondes)", msg2, delay);
-            }
-            else if (numero == 3)
-            {
-                snprintf(message, sizeof(message), "%s (message du fils 1 après %d secondes)", msg3, delay);
-            }
-            write(fd1[1], message, strlen(message) + 1);
-            delay = myRandom(4, 6); // Générer un délai aléatoire entre 4 et 6 secondes
-            sleep(delay);           // Attendre le délai généré aléatoirement
-            i++;
-        }
-        close(fd1[1]);
+        // code du fils 1
+        vivre_ma_vie_de_fils(1, pipe1);
     }
     else
     {
-
-        if (pipe(fd2) == -1)
+        if (pipe(pipe2) == -1)
         {
             perror("Erreur lors de la création du tube");
             exit(EXIT_FAILURE);
@@ -166,196 +184,13 @@ int main()
         if (pid2 == 0)
         {
             // Code du second processus fils
-            close(fd1[0]);
-            int messagesCount = 3; // Générer 10 messages
-            int i = 0;
-            int delay = 1;
-            while (i < messagesCount)
-            {
-                char maChaine[] = "msg"; // Exemple de chaîne
-                int longueur = strlen(maChaine);
-                int numero = myRandom(1, 3);
-                char message[100];
-                char msg1[20] = "bonjour";
-                char msg2[20] = "au revoir";
-                char msg3[20] = "a demain";
-                if (numero == 1)
-                {
-                    snprintf(message, sizeof(message), "%s (message du fils 2 après %d secondes)", msg1, delay);
-                }
-                else if (numero == 2)
-                {
-                    snprintf(message, sizeof(message), "%s (message du fils 2 après %d secondes)", msg2, delay);
-                }
-                else if (numero == 3)
-                {
-                    snprintf(message, sizeof(message), "%s (message du fils 2 après %d secondes)", msg3, delay);
-                }
-                write(fd1[1], message, strlen(message) + 1);
-                delay = myRandom(4, 6); // Générer un délai aléatoire entre 4 et 6 secondes
-                sleep(delay);           // Attendre le délai généré aléatoirement
-                i++; 
-            }
-            close(fd1[1]);
+            vivre_ma_vie_de_fils(2, pipe2);
         }
         else
         {
-            fctParent(fd2);
-            fctParent(fd1);
+            // Code du processus parent
+            gerer_mes_fils(pipe1, pipe2);
+            return 0;
         }
-
-        return 0;
     }
 }
-
-    // // test pipes bloquants
-    // // ps -aux | grep "myprocess"
-    // // echo   $(ps -aux | grep "pipeBlo" | awk '{ print $2 }')
-    // // kill   $(ps -aux | grep "pipeBlo" | awk '{ print $2 }')
-
-    // #include <stdio.h>
-    // #include <stdlib.h>
-    // #include <unistd.h>
-    // #include <string.h>
-    // #include <sys/types.h>
-    // #include <sys/wait.h>
-    // #include <fcntl.h>
-    // #include <time.h>
-
-    // int myRandom(int min, int max)
-    // {
-    //     int nombreAlea = rand() % (max - min + 1) + min;
-    //     return nombreAlea;
-    // }
-
-    // int myFct(char msg[20], char buffer[150])
-    // {
-    //     printf("Le mot '%s' a été trouvé dans la phrase : '%s'\n", msg, buffer);
-    // }
-    // int main()
-    // {
-    //     int fd[2];
-    //     pid_t pid;
-    //     srand(time(NULL));
-
-    //     if (pipe(fd) == -1)
-    //     {
-    //         perror("Erreur de la création du tube");
-    //         exit(EXIT_FAILURE);
-    //     }
-
-    //     pid = fork();
-
-    //     if (pid == -1)
-    //     {
-    //         perror("Erreur lors de la création du processus fils");
-    //         exit(EXIT_FAILURE);
-    //     }
-
-    //     if (pid == 0)
-    //     {
-    //         close(fd[0]);
-    //         int messagesCount = 10; // Générer 10 messages
-    //         int i = 0;
-    //         int delay = 1;
-    //         while (i < messagesCount)
-    //         {
-    //             char maChaine[] = "msg"; // Exemple de chaîne
-    //             int longueur = strlen(maChaine);
-    //             int numero = myRandom(1, 3);
-    //             char message[100];
-    //             char msg1[20] = "bonjour";
-    //             char msg2[20] = "au revoir";
-    //             char msg3[20] = "a demain";
-    //             if (numero == 1)
-    //             {
-    //                 snprintf(message, sizeof(message), "%s (message après %d secondes)", msg1, delay);
-    //             }
-    //             else if (numero == 2)
-    //             {
-    //                 snprintf(message, sizeof(message), "%s (message après %d secondes)", msg2, delay);
-    //             }
-    //             else if (numero == 3)
-    //             {
-    //                 snprintf(message, sizeof(message), "%s (message après %d secondes)", msg3, delay);
-    //             }
-    //             write(fd[1], message, strlen(message) + 1);
-    //             delay = myRandom(4, 6); // Générer un délai aléatoire entre 4 et 6 secondes
-    //             sleep(delay);           // Attendre le délai généré aléatoirement
-    //             i++;
-    //         }
-    //         close(fd[1]);
-    //     }
-    //     else
-    //     {
-
-    //         // Code du processus parent
-    //         close(fd[1]); // Fermer le descripteur d'écriture, car le parent lit seulement
-    //         char buffer[150];
-    //         int bytesRead;
-    //         //  int status;
-    //         //         waitpid(pid, &status, 0); // Attendre que le processus fils se termine
-    //         fcntl(fd[0], F_SETFL, O_NONBLOCK);
-    //         int k = 0;
-    //         while (1)
-    //         {
-    //             k++;
-    //             // Lecture non bloquante
-    //             bytesRead = read(fd[0], buffer, sizeof(buffer));
-    //             if (bytesRead > 0)
-    //             {
-    //                 char msg1[20] = "bonjour";
-    //                 char msg2[20] = "au revoir";
-    //                 char msg3[20] = "a demain";
-    //                 k = 0;
-    //                 if (strstr(buffer, msg1) != NULL)
-    //                 {
-    //                     // printf("Le mot '%s' a été trouvé dans la phrase : '%s'\n", msg1, buffer);
-    //                     myFct(msg1, buffer);
-    //                 }
-    //                 // else
-    //                 // {
-    //                 //     printf("Le mot '%s' et '%s' n'ont pas été trouvé dans la phrase : '%s'\n", msg2, msg3, buffer);
-    //                 // }
-    //                 else if (strstr(buffer, msg2) != NULL)
-    //                 {
-    //                     // printf("Le mot '%s' a été trouvé dans la phrase : '%s'\n", msg2, buffer);
-    //                     myFct(msg2, buffer);
-    //                 }
-    //                 // else
-    //                 // {
-    //                 //     printf("Le mot '%s' et '%s' n'ont pas été trouvé dans la phrase : '%s'\n", msg1, msg3, buffer);
-    //                 // }
-    //                 else if (strstr(buffer, msg3) != NULL)
-    //                 {
-    //                     // printf("Le mot '%s' a été trouvé dans la phrase : '%s'\n", msg3, buffer);
-    //                     myFct(msg3, buffer);
-    //                 }
-    //                 // else
-    //                 // {
-    //                 //     printf("Le mot '%s' et '%s' n'ont pas été trouvé dans la phrase : '%s'\n", msg1, msg2, buffer);
-    //                 // }
-    //                 // printf("Message reçu du fils : %s\n", buffer);
-    //             }
-    //             else if (bytesRead == 0)
-    //             {
-    //                 // Toutes les données du tube ont été lues, sortie de la boucle
-    //                 break;
-    //             }
-    //             else if (bytesRead == -1)
-    //             {
-    //                 printf("%d) Pas de message du fils.\n", k);
-    //                 // Les données ne sont pas encore disponibles, attendre un peu
-    //                 usleep(1000000); // Attendre 0.5 seconde
-    //             }
-    //             else
-    //             {
-    //                 perror("Erreur de lecture");
-    //                 break;
-    //             }
-    //         }
-    //         close(fd[0]);
-    //     }
-
-    //     return 0;
-    // }
