@@ -12,8 +12,43 @@
 #include <fcntl.h>
 #include <time.h>
 
-int positionV1;
-int positionV2;
+int positionCar1;
+int positionCar2;
+
+const int nombreTirets = 70;
+void dessiner(int position)
+{
+    char buffer[nombreTirets + 1];
+    for (int i = 0; i < nombreTirets; i++)
+    {
+        buffer[i] = '-';
+    }
+    buffer[sizeof(buffer) - 1] = '\0';
+    int positionEtoile = nombreTirets * position / 100;
+    buffer[positionEtoile] = '*';
+    printf("%s\n\n", buffer);
+}
+
+// prend la valeur a la fin de la chaine de caractère après la |
+int getValue(char *chaine)
+{
+    // Chercher la position du caractère '|'
+    char *separator = strchr(chaine, '|');
+
+    if (separator != NULL)
+    {
+        // Utiliser strtok pour diviser la chaîne à partir de '|'
+        char *token = strtok(separator, "|");
+
+        // Utiliser atoi pour convertir le token suivant '|' en entier
+        if (token != NULL)
+        {
+            return atoi(token);
+        }
+    }
+
+    return -1; // Valeur par défaut si le symbole '|' n'est pas trouvé ou s'il n'y a pas de valeur après '|'
+}
 
 int myRandom(int min, int max)
 {
@@ -27,51 +62,29 @@ int traiterMessage(char msg[20], char buffer[150])
 }
 
 // cette function est ex
-void vivre_ma_vie_de_fils(int nr_fils, int pipe[2])
+void vivre_ma_vie_de_fils(int nr_car, int pipe[2])
 {
-
-    // srand(time(NULL)+nr_fils);
+    srand(time(NULL) + nr_car);
     close(pipe[0]);
     int messagesCount;
-    char msg[100];
-    snprintf(msg, sizeof(msg), "ouverture du pipe du fils nr %d je démarre\n", nr_fils);  
+    char msg[1000];
+    snprintf(msg, sizeof(msg), "je suis la voiture numéro %d et je démarre\n", nr_car);
     write(pipe[1], msg, strlen(msg) + 1);
-    if (nr_fils == 1)
+    int dureeCourse = myRandom(7, 12);
+    int sec = 0;
+    int position;
+    while (sec <= dureeCourse)
     {
-        messagesCount = 3;
+        position = ((100 * sec) / dureeCourse);
+        snprintf(msg, sizeof(msg), "je suis la voiture numéro %d et je suis à la position, sec: %d, duree: %d |%d\n", nr_car, sec, dureeCourse, position);
+        write(pipe[1], msg, strlen(msg) + 1);
+        sleep(1);
+        sec++;
     }
-    else
-    {
-        messagesCount = 5;
-    }
+    snprintf(msg, sizeof(msg), "je suis la voiture numéro %d et je viens d'arriver\n", nr_car);
+    write(pipe[1], msg, strlen(msg) + 1);
     int i = 0;
     int delay = 1;
-    // while (i < messagesCount)
-    // {
-    //     char maChaine[] = "msg"; // Exemple de chaîne
-    //     int longueur = strlen(maChaine);
-    //     int numero = myRandom(1, 3);
-    //     char message[100];
-    //     char msg1[20] = "bonjour";
-    //     char msg2[20] = "au revoir";
-    //     char msg3[20] = "a demain";
-    //     if (numero == 1)
-    //     {
-    //         snprintf(message, sizeof(message), "%s (message %d du fils 2 après %d secondes)", msg1, i, delay);
-    //     }
-    //     else if (numero == 2)
-    //     {
-    //         snprintf(message, sizeof(message), "%s (message %d du fils 2 après %d secondes)", msg2, i, delay);
-    //     }
-    //     else if (numero == 3)
-    //     {
-    //         snprintf(message, sizeof(message), "%s (message %d du fils 2 après %d secondes)", msg3, i, delay);
-    //     }
-    //     write(pipe[1], message, strlen(message) + 1);
-    //     delay = myRandom(2, 3); // Générer un délai aléatoire entre 4 et 6 secondes
-    //     sleep(delay);           // Attendre le délai généré aléatoirement
-    //     i++;
-    // }
     close(pipe[1]);
 }
 
@@ -86,7 +99,7 @@ void vivre_ma_vie_de_fils(int nr_fils, int pipe[2])
 //          > 0 : il y a des char dans le pipe
 //          = 0 : le pipe a été clôturé
 //          -1  : pas de char dans le pipe pour le moment
-int traiterContenuActuelDuPipe(int nr_fils, int numPipe[])
+int traiterContenuActuelDuPipe(int nr_car, int numPipe[])
 {
     char buffer[150];
 
@@ -95,7 +108,7 @@ int traiterContenuActuelDuPipe(int nr_fils, int numPipe[])
     int bytesRead = read(numPipe[0], buffer, sizeof(buffer));
     if (bytesRead > 0)
     {
-        printf(buffer);
+        // printf(buffer);
         if (strstr(buffer, "bonjour") != NULL)
         {
             traiterMessage("bonjour", buffer); // Assurez-vous que traiterMessage est définie correctement
@@ -110,18 +123,51 @@ int traiterContenuActuelDuPipe(int nr_fils, int numPipe[])
         }
         else if (strstr(buffer, "je démarre") != NULL)
         {
-            positionV1 = 0;
+            if (nr_car == 1)
+            {
+                positionCar1 = 0;
+            }
+            if (nr_car == 2)
+            {
+                positionCar2 = 0;
+            }
+        }
+        else if (strstr(buffer, "arriver") != NULL)
+        {
+            if (nr_car == 1)
+            {
+                positionCar1 = 100;
+            }
+            if (nr_car == 2)
+            {
+                positionCar2 = 100;
+            }
+        }
+        else if (strstr(buffer, "position") != NULL)
+        {
+            if (nr_car == 1)
+            {
+                positionCar1 = getValue(buffer);
+            }
+            if (nr_car == 2)
+            {
+                positionCar2 = getValue(buffer);
+            }
+        }
+        else
+        {
+            printf("Message inconnu : %s\n", buffer);
         }
         return 1; // le pipe est encore ouvert
     }
     else if (bytesRead == 0)
     {
-        printf("Le pipe du fils nr %d a été clôturé par le fils\n", nr_fils);
+        printf("Le pipe du fils nr %d a été clôturé par le fils\n", nr_car);
         return 0; // le pipe a été clôturé
     }
     else if (bytesRead == -1)
     {
-        // printf("Pas de données dans le pipe du fils %d pour le moment\n", nr_fils);
+        // printf("Pas de données dans le pipe du fils %d pour le moment\n", nr_car);
         return 1; // le pipe est encore ouvert
     }
 }
@@ -135,7 +181,9 @@ void gerer_mes_fils(int pipe1[2], int pipe2[2])
     while (1)
     {
         k++;
-        printf("%d)\n", k);
+        printf("%d) voiture 1: %d, voiture 2: %d\n", k, positionCar1, positionCar2);
+        dessiner(positionCar1);
+        dessiner(positionCar2);
         int statusPipe1 = traiterContenuActuelDuPipe(1, pipe1);
         int statusPipe2 = traiterContenuActuelDuPipe(2, pipe2);
 
