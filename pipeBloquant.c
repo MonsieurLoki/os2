@@ -27,9 +27,12 @@ int myFct(char msg[20], char buffer[150])
 void vivre_ma_vie_de_fils(int nr_fils, int pipe[2])
 {
 
-    srand(time(NULL));
+    // srand(time(NULL)+nr_fils);
     close(pipe[0]);
     int messagesCount;
+    char msg[100];
+    snprintf(msg, sizeof(msg), "ouverture du pipe du fils nr %d je démarre\n", nr_fils);  
+    write(pipe[1], msg, strlen(msg) + 1);
     if (nr_fils == 1)
     {
         messagesCount = 3;
@@ -40,32 +43,32 @@ void vivre_ma_vie_de_fils(int nr_fils, int pipe[2])
     }
     int i = 0;
     int delay = 1;
-    while (i < messagesCount)
-    {
-        char maChaine[] = "msg"; // Exemple de chaîne
-        int longueur = strlen(maChaine);
-        int numero = myRandom(1, 3);
-        char message[100];
-        char msg1[20] = "bonjour";
-        char msg2[20] = "au revoir";
-        char msg3[20] = "a demain";
-        if (numero == 1)
-        {
-            snprintf(message, sizeof(message), "%s (message du fils 2 après %d secondes)", msg1, delay);
-        }
-        else if (numero == 2)
-        {
-            snprintf(message, sizeof(message), "%s (message du fils 2 après %d secondes)", msg2, delay);
-        }
-        else if (numero == 3)
-        {
-            snprintf(message, sizeof(message), "%s (message du fils 2 après %d secondes)", msg3, delay);
-        }
-        write(pipe[1], message, strlen(message) + 1);
-        delay = myRandom(2, 3); // Générer un délai aléatoire entre 4 et 6 secondes
-        sleep(delay);           // Attendre le délai généré aléatoirement
-        i++;
-    }
+    // while (i < messagesCount)
+    // {
+    //     char maChaine[] = "msg"; // Exemple de chaîne
+    //     int longueur = strlen(maChaine);
+    //     int numero = myRandom(1, 3);
+    //     char message[100];
+    //     char msg1[20] = "bonjour";
+    //     char msg2[20] = "au revoir";
+    //     char msg3[20] = "a demain";
+    //     if (numero == 1)
+    //     {
+    //         snprintf(message, sizeof(message), "%s (message %d du fils 2 après %d secondes)", msg1, i, delay);
+    //     }
+    //     else if (numero == 2)
+    //     {
+    //         snprintf(message, sizeof(message), "%s (message %d du fils 2 après %d secondes)", msg2, i, delay);
+    //     }
+    //     else if (numero == 3)
+    //     {
+    //         snprintf(message, sizeof(message), "%s (message %d du fils 2 après %d secondes)", msg3, i, delay);
+    //     }
+    //     write(pipe[1], message, strlen(message) + 1);
+    //     delay = myRandom(2, 3); // Générer un délai aléatoire entre 4 et 6 secondes
+    //     sleep(delay);           // Attendre le délai généré aléatoirement
+    //     i++;
+    // }
     close(pipe[1]);
 }
 
@@ -92,7 +95,7 @@ int traiterContenuActuelDuPipe(int nr_fils, int numPipe[])
         char msg1[20] = "bonjour";
         char msg2[20] = "au revoir";
         char msg3[20] = "a demain";
-
+        printf(buffer);
         if (strstr(buffer, msg1) != NULL)
         {
             myFct(msg1, buffer); // Assurez-vous que myFct est définie correctement
@@ -105,28 +108,34 @@ int traiterContenuActuelDuPipe(int nr_fils, int numPipe[])
         {
             myFct(msg3, buffer);
         }
+        else if (strstr(buffer, "je démarre") != NULL)
+        {
+            printf("|-----|-----|-----|-----|-----|\n");
+        }
+        return 1; // le pipe est encore ouvert
     }
     else if (bytesRead == 0)
     {
         printf("Le pipe du fils nr %d a été clôturé par le fils\n", nr_fils);
-        // close(numPipe[0]);
-        return 0; // Pipe a été clôturé
+        return 0; // le pipe a été clôturé
     }
     else if (bytesRead == -1)
     {
-        printf("Pas de données dans le pipe du fils %d pour le moment\n", nr_fils);
-        return 1;
+        // printf("Pas de données dans le pipe du fils %d pour le moment\n", nr_fils);
+        return 1; // le pipe est encore ouvert
     }
 }
 
 void gerer_mes_fils(int pipe1[2], int pipe2[2])
 {
-
     close(pipe1[1]); // Fermer le descripteur d'écriture, car le parent lit seulement
     close(pipe2[1]); // Fermer le descripteur d'écriture, car le parent lit seulement
 
+    int k = 0;
     while (1)
     {
+        k++;
+        printf("%d)\n", k);
         int statusPipe1 = traiterContenuActuelDuPipe(1, pipe1);
         int statusPipe2 = traiterContenuActuelDuPipe(2, pipe2);
 
@@ -135,9 +144,26 @@ void gerer_mes_fils(int pipe1[2], int pipe2[2])
             printf("Les deux pipes ont été fermés par les fils.\n");
             break; // Sortir de la boucle infinie
         }
+        else
+        {
+            char buffer[20];
+            int bytesRead = read(pipe1[0], buffer, sizeof(buffer));
+            if (bytesRead > 0)
+            {
+                printf("Message reçu depuis le fils 1 : %s\n", buffer);
+            }
+
+            bytesRead = read(pipe2[0], buffer, sizeof(buffer));
+            if (bytesRead > 0)
+            {
+                printf("Message reçu depuis le fils 2 : %s\n", buffer);
+            }
+        }
         // printf("statusPipe1 : %d; statusPipe2 : %d\n", statusPipe1, statusPipe2);
         usleep(1000000); // attendre x microsecond
     }
+    close(pipe1[0]); // Fermer le descripteur de lecture du fils 1
+    close(pipe2[0]); // Fermer le descripteur de lecture du fils 2
 }
 
 int main()
@@ -145,7 +171,6 @@ int main()
     int pipe1[2], pipe2[2];
     // int pipe[20][2];
     pid_t pid1, pid2;
-    srand(time(NULL));
 
     if (pipe(pipe1) == -1)
     {
