@@ -76,7 +76,7 @@ void vivre_ma_vie_de_fils(int nr_car, int pipe[2])
     while (sec <= dureeCourse)
     {
         position = ((100 * sec) / dureeCourse);
-        snprintf(msg, sizeof(msg), "je suis la voiture numéro %d et je suis à la position, sec: %d, duree: %d |%d\n", nr_car, sec, dureeCourse, position);
+        snprintf(msg, sizeof(msg), "je suis la voiture numéro %d et je suis à la position !!, sec: %d, duree: %d |%d\n", nr_car, sec, dureeCourse, position);
         write(pipe[1], msg, strlen(msg) + 1);
         sleep(1);
         sec++;
@@ -170,7 +170,7 @@ int traiterContenuActuelDuPipe(int nr_car, int numPipe[])
         // printf("Pas de données dans le pipe du fils %d pour le moment\n", nr_car);
         return 1; // le pipe est encore ouvert
     }
-}
+} 
 
 void gerer_mes_fils(int pipe1[2], int pipe2[2])
 {
