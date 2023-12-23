@@ -27,7 +27,7 @@ int traiterMessage(char msg[20], char buffer[150])
 }
 
 // cette function est ex
-void vivre_ma_vie_de_fils(int nr_fils, int pipe[2])
+void vivre_ma_vie_de_voiture(int nr_fils, int pipe[2])
 {
 
     // srand(time(NULL)+nr_fils);
@@ -126,7 +126,7 @@ int traiterContenuActuelDuPipe(int nr_fils, int numPipe[])
     }
 }
 
-void gerer_mes_fils(int pipe1[2], int pipe2[2])
+void gererVoitures(int pipe1[2], int pipe2[2])
 {
     close(pipe1[1]); // Fermer le descripteur d'écriture, car le parent lit seulement
     close(pipe2[1]); // Fermer le descripteur d'écriture, car le parent lit seulement
@@ -189,7 +189,7 @@ int main()
     if (pid1 == 0)
     {
         // code du fils 1
-        vivre_ma_vie_de_fils(1, pipe1);
+        vivre_ma_vie_de_voiture(1, pipe1);
     }
     else
     {
@@ -209,12 +209,12 @@ int main()
         if (pid2 == 0)
         {
             // Code du second processus fils
-            vivre_ma_vie_de_fils(2, pipe2);
+            vivre_ma_vie_de_voiture(2, pipe2);
         }
         else
         {
             // Code du processus parent
-            gerer_mes_fils(pipe1, pipe2);
+            gererVoitures(pipe1, pipe2);
             return 0;
         }
     }

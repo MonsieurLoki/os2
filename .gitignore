@@ -3,3 +3,8 @@ pipeBloquant
 cars
 testGetValue
 testDessinerTiret
+*.o
+*.elf
+Dijktra
+Decker
+algo Boulangerie
