@@ -15,7 +15,7 @@ static int get_shared_block(char *filename, int size)
     // Request a key
     // The key is linked to a filename, so that other programs can access it.
     key = ftok(filename, 0);
-    if (key == IPC_RESULT_ERROR)
+    if (key == IPC_RESULT_ERROR) 
     {
         return IPC_RESULT_ERROR;
     }

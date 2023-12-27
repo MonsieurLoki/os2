@@ -33,6 +33,34 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
+            "name": "shmem",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${fileDirname}/${fileBasenameNoExtension}",
+            "args": [
+                "this is a test"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "build shmem",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
             "name": "(child is followed by DBG) C/C++: Run compiled executable",
             "type": "cppdbg",
             "request": "launch",

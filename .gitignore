@@ -8,3 +8,5 @@ testDessinerTiret
 Dijktra
 Decker
 algo Boulangerie
+destroy_shmem
+read_shmem

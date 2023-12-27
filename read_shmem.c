@@ -9,13 +9,12 @@
 
 typedef struct
 {
-    int id;
-    char name[20];
-} Person;
-
-
-char person_name[20];
-int person_id;
+    int car_nr;
+    char pilote[20];
+    float best_time_sector1;
+    float best_time_sector2;
+    float best_time_sector3;
+} Car;
 
 sem_t semaphore;
 
@@ -31,37 +30,43 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    Person *person;
+    Car *car;
+    int car_nr;
+    char pilote[20];
+    float best_sector1;
+    float best_sector2;
+    float best_sector3;
 
-    // if (argc != 1)
-    // {
-    //     printf("usage - %s //no args", argv[0]);
-    //     return -1;
-    // }
     // grab the shared memory block
     char *block = attach_memory_block(FILENAME, BLOCK_SIZE);
     if (block == NULL)
     {
         printf("ERROR: couldn't get block\n");
-        return -1;
+        exit(1);
     }
 
-    person = (Person *) block;
+    car = (Car *)block;
 
-   // Acquire the semaphore before accessing the shared memory
-   // not clear if using a semaphore is necessary when reading !?
+    // Acquire the semaphore before accessing the shared memory
+    // not clear if using a semaphore is necessary when reading !?
     sem_wait(sem);
 
-    // printf("Reading: \"%s\"\n", block);
-
-    strncpy(person_name,person->name,20);
-    person_id = person->id;
+    car_nr = car->car_nr;
+    strncpy(pilote, car->pilote, 20);
+    best_sector1 = car->best_time_sector1;
+    best_sector2 = car->best_time_sector2;
+    best_sector3 = car->best_time_sector3;
+    // printf("voici ce que j'ai trouvé dans la mém partagée : %s\n", block);
 
     // Release the semaphore after accessing the shared memory
     sem_post(sem);
 
-    printf("Reading: person ID: %d, person name: %s\n", person_id, person_name);
+    printf("On vient juste de lire dans la mémoire partagée: car_nr: %d, pilote: %s, best1: %f, best2: %f, best3: %f\n", car_nr, pilote,
+           best_sector1, best_sector2, best_sector3);
 
     detach_memory_block(block);
+    sem_close(sem);
+    sem_unlink("my_semaphore");
+
     return 0;
 }
