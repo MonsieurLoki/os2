@@ -27,9 +27,6 @@
 // attach a shared memory block
 // associated with filename
 // create it if it doesn't exist
-void *attach_memory_block(char *filename, int size);
-bool detach_memory_block(char *block);
-bool destroy_memory_block(char *filename);
 
 // all of the programs will share these values
 #define BLOCK_SIZE 4096
@@ -46,6 +43,7 @@ struct Car
     float best_time_sector2;
     float best_time_sector3;
     int position;
+    int secteur_courant;
 };
 
 // definition of the Best_sector times
@@ -113,23 +111,89 @@ bool destroy_memory_block(char *filename)
     return (shmctl(shared_block_id, IPC_RMID, NULL) != IPC_RESULT_ERROR);
 }
 
-// int positionCar1;
-// int positionCar2;
-// int positionCar[NB_VOITURE];
-
-const int nombreTirets = 70;
-void dessiner(int position)
+void destroy_shmem()
 {
-    char buffer[nombreTirets + 1];
+    if (destroy_memory_block(FILENAME))
+    {
+        printf("Destroyed block: %s\n", FILENAME);
+    }
+    else
+    {
+        printf("Could not destroy block: %s\n", FILENAME);
+    }
+}
+
+int myRandom(int min, int max)
+{
+    int nombreAlea = rand() % (max - min + 1) + min;
+    return nombreAlea;
+}
+
+void gererSecteur(int car_nr, int nr_secteur)
+{
+    int dureeCourse_ms = myRandom(7000, 12000);
+    int passed_ms = 0; // nb of ms passed since beginning of the sector
+    int delay_ms = 100;
+    int position;
+    shmem_data->cars[car_nr].secteur_courant = nr_secteur;
+    while (passed_ms <= dureeCourse_ms)
+    {
+        position = ((100 * passed_ms) / dureeCourse_ms);
+        shmem_data->cars[car_nr].position = position;
+        usleep(delay_ms * 1000); // attendre x microsecond
+        passed_ms += delay_ms;
+    }
+    shmem_data->cars[car_nr].position = 100;
+}
+
+void dessiner(int car_nr, int position)
+{
+    int secteur_courant = shmem_data->cars[car_nr].secteur_courant;
+    const int nombreTirets = 30;
+    char secteur_0[nombreTirets + 1];
+    char secteur_1[nombreTirets + 1];
+    char secteur_2[nombreTirets + 1];
+
+    // fill sectors
     for (int i = 0; i < nombreTirets; i++)
     {
-        buffer[i] = '-';
+        secteur_0[i] = '-';
     }
-    buffer[nombreTirets] = '\0';
-    buffer[nombreTirets - 1] = '|';
+    secteur_0[nombreTirets] = '\0';
+    secteur_0[nombreTirets - 1] = '|';
+
+    for (int i = 0; i < nombreTirets; i++)
+    {
+        secteur_1[i] = '-';
+    }
+    secteur_1[nombreTirets] = '\0';
+    secteur_1[nombreTirets - 1] = '|';
+
+    for (int i = 0; i < nombreTirets; i++)
+    {
+        secteur_2[i] = '-';
+    }
+    secteur_2[nombreTirets] = '\0';
+    secteur_2[nombreTirets - 1] = '|';
+
+    // compute where to put the car
     int positionEtoile = (nombreTirets - 1) * position / 100;
-    buffer[positionEtoile] = '*';
-    printf("%s\n", buffer);
+    if (secteur_courant == 0)
+    {
+        secteur_0[positionEtoile] = '*';
+    }
+    if (secteur_courant == 1)
+    {
+        secteur_1[positionEtoile] = '*';
+    }
+    if (secteur_courant == 2)
+    {
+        secteur_2[positionEtoile] = '*';
+    }
+
+    printf("%3d) voiture sect:%2d, pos:%3d ", car_nr, secteur_courant, position);
+
+    printf("%s%s%s\n", secteur_0, secteur_1, secteur_2);
 }
 
 // prend la valeur a la fin de la chaine de caractère après la |
@@ -153,19 +217,7 @@ int getValue(char *chaine)
     return -1; // Valeur par défaut si le symbole '|' n'est pas trouvé ou s'il n'y a pas de valeur après '|'
 }
 
-int myRandom(int min, int max)
-{
-    int nombreAlea = rand() % (max - min + 1) + min;
-    return nombreAlea;
-}
-
-int traiterMessage(char msg[20], char buffer[150])
-{
-    printf("Le mot '%s' a été trouvé dans la phrase : '%s'\n", msg, buffer);
-}
-
-// cette function est ex
-void vivre_ma_vie_de_voiture(int nr_car, int pipe[2])
+void vivre_ma_vie_de_voiture(int car_nr)
 {
     char *block;
     block = attach_memory_block(FILENAME, BLOCK_SIZE);
@@ -174,128 +226,19 @@ void vivre_ma_vie_de_voiture(int nr_car, int pipe[2])
         printf("ERROR: couldn't get block\n");
         exit(1);
     }
-    // car = (Car *)block;
 
     shmem_data = (Shmem_data *)block;
 
-    srand(time(NULL) + nr_car);
-    close(pipe[0]);
-    int messagesCount;
-    char msg[1000];
-    snprintf(msg, sizeof(msg), "je suis la voiture numéro %d et je démarre\n", nr_car);
-    write(pipe[1], msg, strlen(msg) + 1);
-    int dureeCourse = myRandom(7, 12);
-    int sec = 0;
-    int position;
-    while (sec <= dureeCourse)
-    {
-        position = ((100 * sec) / dureeCourse);
-        // snprintf(msg, sizeof(msg), "je suis la voiture numéro %d et je suis à la position **, sec: %d, duree: %d |%d\n", nr_car, sec, dureeCourse, position);
-        // write(pipe[1], msg, strlen(msg) + 1);
-        shmem_data->cars[nr_car].position = position;
-        sleep(1);
-        sec++;
-    }
-    snprintf(msg, sizeof(msg), "je suis la voiture numéro %d et je viens d'arriver\n", nr_car);
-    write(pipe[1], msg, strlen(msg) + 1);
-    int i = 0;
-    int delay = 1;
-    close(pipe[1]);
+    srand(time(NULL) + car_nr);
 
-    // //////////////////////////////////////////////////////////////////////////////////
-    // // Car *car;
-    // // struct Car *cars[NB_VOITURE + 1];
-    // int car_nr;
-    // char pilote[20];
-    // float best_sector1;
-    // float best_sector2;
-    // float best_sector3;
-    // int position;
+    gererSecteur(car_nr, 0);
+    gererSecteur(car_nr, 1);
+    gererSecteur(car_nr, 2);
 
-    // best_sector1 = shmem_data->cars[13].best_time_sector1;
-
-    // car_nr = car->car_nr;
-    // strncpy(pilote, car->pilote, 20);
-    // best_sector1 = car->best_time_sector1;
-    // best_sector2 = car->best_time_sector2;
-    // best_sector3 = car->best_time_sector3;
-    // printf("On vient de lire dans la mémoire partagée: car_nr: %d, pilote: %s, best1: %f, best2: %f, best3: %f\n", car_nr, pilote,
-    //        best_sector1, best_sector2, best_sector3);
-
-    // printf("On vient de lire dans la mémoire partagée le best time pour la voiture 13 : %f, \n", best_sector1);
+    // int i = 0;
+    // int delay = 1;
 
     detach_memory_block(block);
-
-    // // strcpy(block, "loki");
-    // printf("message lu par le fils nr %d : %s\n", nr_car, block);
-
-    // exit(0);
-}
-
-// cette fonction regarde dans le pipe passé en param s'il y a un message à traiter
-// si c'est le cas, on traite le message et on sort
-// sinon, on sort directement
-// on revoie comme résultat
-//      1 si le pipe est encore ouvert (càd pas encore fermé par le fils)
-//      0 si le pipe a été fermé par le fils
-// NB : nb_bytes_read = read(pipe, buffer, sizeof(buffer)
-//    si nb_bytes_read =
-//          > 0 : il y a des char dans le pipe
-//          = 0 : le pipe a été clôturé
-//          -1  : pas de char dans le pipe pour le moment
-int traiterContenuActuelDuPipe(int nr_car, int numPipe[])
-{
-    char buffer[150];
-
-    // faire en sorte que le pipe ne soit pas bloquant
-    fcntl(numPipe[0], F_SETFL, O_NONBLOCK);
-
-    int bytesRead = read(numPipe[0], buffer, sizeof(buffer));
-    if (bytesRead > 0)
-    {
-        // printf(buffer);
-        // if (strstr(buffer, "bonjour") != NULL)
-        // {
-        //     traiterMessage("bonjour", buffer); // Assurez-vous que traiterMessage est définie correctement
-        // }
-        // else if (strstr(buffer, "au revoir") != NULL)
-        // {
-        //     traiterMessage("au revoir", buffer);
-        // }
-        // else if (strstr(buffer, "a demain") != NULL)
-        // {
-        //     traiterMessage("a demain", buffer);
-        // }
-        // if (strstr(buffer, "je démarre") != NULL)
-        // {
-        //     positionCar[nr_car] = 0;
-        // }
-        // else if (strstr(buffer, "arriver") != NULL)
-        // {
-
-        //     positionCar[nr_car] = 100;
-        // }
-        // else if (strstr(buffer, "position") != NULL)
-        // {
-        //     positionCar[nr_car] = getValue(buffer);
-        // }
-        // else
-        // {
-        //     printf("Message inconnu : %s\n", buffer);
-        // }
-        // return 1; // le pipe est encore ouvert
-    }
-
-    else if (bytesRead == 0)
-    {
-        // printf("Le pipe du fils nr %d a été clôturé par le fils\n", nr_car);
-        return 0; // le pipe a été clôturé
-    }
-    else if (bytesRead == -1)
-    {
-        // printf("Pas de données dans le pipe du fils %d pour le moment\n", nr_car);
-        return 1; // le pipe est encore ouvert
-    }
 }
 
 // cette fonction renvoit 1 si toutes les voitures ont terminé, c'est-à-dire que le position est à 100% du secteur
@@ -315,93 +258,34 @@ int toutesLesVoituresOntTermine()
     return 1;
 }
 
-// void gererVoitures(int pipe1[2], int pipe2[2])
-void gererVoitures(int pipe[][2])
+void gererVoitures()
 {
-    // close(pipe1[1]); // Fermer le descripteur d'écriture, car le parent lit seulement
-    // close(pipe2[1]); // Fermer le descripteur d'écriture, car le parent lit seulement
-
-    for (int i = 0; i < NB_VOITURE; i++)
-    {
-        close(pipe[i][1]);
-    }
-    int k = 0;
+    int iter = 0;
     while (1)
     {
         printf("\n");
-        k++;
-        int statusPipe[NB_VOITURE];
+        iter++;
+
         for (int i = 0; i < NB_VOITURE; i++)
         {
-            statusPipe[i] = traiterContenuActuelDuPipe(i, pipe[i]);
-
-            printf("%3d) voiture %2d: %3d ", k, i, shmem_data->cars[i].position);
-            // dessiner(positionCar1);
-            // dessiner(positionCar2);
-
-            dessiner(shmem_data->cars[i].position);
-            // int statusPipe1 = traiterContenuActuelDuPipe(1, pipe1);
-            // int statusPipe2 = traiterContenuActuelDuPipe(2, pipe2);
-
-            // else
-            // {
-            //     char buffer[20];
-            //     int bytesRead = read(pipe[i][0], buffer, sizeof(buffer));
-            //     if (bytesRead > 0)
-            //     {
-            //         printf("Message reçu depuis le fils %d : %s\n", i, buffer);
-            //     }
-
-            //     // bytesRead = read(pipe[0], buffer, sizeof(buffer));
-            //     // if (bytesRead > 0)
-            //     // {
-            //     //     printf("Message reçu depuis le fils 2 : %s\n", buffer);
-            //     // }
-            // }
-            // printf("statusPipe1 : %d; statusPipe2 : %d\n", statusPipe1, statusPipe2);
+            printf("%3d) voiture %2d, secteur courant : %d, position :  %3d \n", iter, i, shmem_data->cars[i].secteur_courant, shmem_data->cars[i].position);
         }
 
-        // if (statusPipe1 == 0 && statusPipe2 == 0)
-
-        int auMoinsUnPipeEncoreOuvert = 0;
-        for (int k = 0; k < NB_VOITURE; k++)
+        for (int i = 0; i < NB_VOITURE; i++)
         {
-            if (statusPipe[k] != 0)
-            {
-                // au moins un des pipes est encore ouvert !
-                auMoinsUnPipeEncoreOuvert = 1;
-            }
-        }
-
-        if (auMoinsUnPipeEncoreOuvert == 0)
-        {
-            break; // Sortir de la boucle infinie
+            dessiner(i, shmem_data->cars[i].position);
         }
 
         if (toutesLesVoituresOntTermine() == 1)
         {
-            break; // sortir de la boucle infinie
+            break;
         }
-
-        usleep(200 * 1000); // attendre x microsecond
-    }
-
-    // printf("Tous les pipes ont été fermés par les fils.\n");
-    // close(pipe1[0]); // Fermer le descripteur de lecture du fils 1
-    // close(pipe2[0]); // Fermer le descripteur de lecture du fils 2
-    for (int k = 0; k < NB_VOITURE; k++)
-    {
-        close(pipe[k][0]); // Fermer le descripteur de lecture du fils
+        usleep(100 * 1000); // attendre x microsecond
     }
 }
 
-int lancerVoiture(int nr_voiture, int Mypipe[])
+int lancerVoiture(int nr_voiture)
 {
-    if (pipe(Mypipe) == -1)
-    {
-        perror("Erreur de la création du tube");
-        exit(EXIT_FAILURE);
-    }
     int pid;
     pid = fork();
 
@@ -413,7 +297,7 @@ int lancerVoiture(int nr_voiture, int Mypipe[])
 
     if (pid == 0)
     {
-        vivre_ma_vie_de_voiture(nr_voiture, Mypipe);
+        vivre_ma_vie_de_voiture(nr_voiture);
         exit(0);
     }
     else
@@ -424,7 +308,7 @@ int lancerVoiture(int nr_voiture, int Mypipe[])
 
 int main()
 {
-    // struct Car *car;
+    destroy_shmem();
 
     char *block = attach_memory_block(FILENAME, BLOCK_SIZE);
     if (block == NULL)
@@ -432,46 +316,19 @@ int main()
         printf("ERROR: couldn't get block\n");
         exit(1);
     }
-    // strcpy(block, "toto2");
-    // printf("voici ce que le père a écrit : %s\n", block);
-    // printf("j'écris dans la mémoire partagée\n");
 
     // mapping the Shmem_data structure on the shared memory block
-    // car = (Car *)block;
-
     shmem_data = (Shmem_data *)block;
 
-    // Write data to the shared memory segment
-    // shmem_data->cars[13].best_time_sector1 = 99;
-    // best_sector3 = car->best_time_sector3;
-    // printf( "On vient de lire dans la mémoire partagée: car_nr: %d, pilote: %s, best1: %f, best2: %f, best3: %f\n", car_nr, pilote,
-    //        best_sector1, best_sector2, best_sector3);
-
-    // car->car_nr = 1;
-    // strcpy(car->pilote, "pilote 1 : john");
-    // car->best_time_sector1 = 10.52;
-    // car->best_time_sector2 = 15.6;
-    // car->best_time_sector3 = 20.71;
-
-    // int pipe1[2], pipe2[2];
-    int pipe[NB_VOITURE][2];
-    // pid_t pid1, pid2;
     pid_t pid[NB_VOITURE];
-    // pid1 = lancerVoiture(1, pipe1);
-    // pid2 = lancerVoiture(2, pipe2);
     for (int i = 0; i < NB_VOITURE; i++)
     {
-        pid[i] = lancerVoiture(i, pipe[i]);
+        pid[i] = lancerVoiture(i);
     }
-    gererVoitures(pipe);
+    gererVoitures();
     detach_memory_block(block);
-    if (destroy_memory_block(FILENAME))
-    {
-        printf("Destroyed block: %s\n", FILENAME);
-    }
-    else
-    {
-        printf("Could not destroy block: %s\n", FILENAME);
-    }
+
+    destroy_shmem();
+
     return 0;
 }
